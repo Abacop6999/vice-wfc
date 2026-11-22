@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
-import { createWaterMaterial } from '@/shaders/waterShader';
+import React from 'react';
+import { getSharedWaterMaterial } from '@/shaders/waterShader';
 
 interface CoastTileProps {
   variant: 'OCEAN' | 'BEACH' | 'PROMENADE';
@@ -28,20 +27,7 @@ export function CoastTile({ variant, tileSeed, isNight }: CoastTileProps) {
 }
 
 function OceanTile({ isNight }: { isNight: boolean }) {
-  const waterMaterial = useMemo(
-    () => createWaterMaterial({ nightFactor: isNight ? 1.0 : 0.0 }),
-    [isNight],
-  );
-
-  useEffect(() => {
-    return () => {
-      waterMaterial.dispose();
-    };
-  }, [waterMaterial]);
-
-  useFrame(({ clock }) => {
-    waterMaterial.uniforms.uTime.value = clock.getElapsedTime();
-  });
+  const waterMaterial = getSharedWaterMaterial(isNight);
 
   return (
     <group>
@@ -50,13 +36,13 @@ function OceanTile({ isNight }: { isNight: boolean }) {
         <boxGeometry args={[4, 0.12, 4]} />
         <meshStandardMaterial color={isNight ? '#041224' : '#084c61'} roughness={0.95} />
       </mesh>
-      {/* Animated GLSL ocean surface */}
+      {/* Animated GLSL ocean surface (shared ShaderMaterial) */}
       <mesh
         position={[0, -0.1, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         material={waterMaterial}
       >
-        <planeGeometry args={[4.02, 4.02, 12, 12]} />
+        <planeGeometry args={[4.02, 4.02, 8, 8]} />
       </mesh>
     </group>
   );

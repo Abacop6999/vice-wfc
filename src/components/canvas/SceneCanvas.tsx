@@ -1,14 +1,22 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import * as THREE from 'three';
+import { updateSharedWaterTime } from '@/shaders/waterShader';
 import { useWfcStore } from '@/store/useWfcStore';
 import { CityGrid } from './CityGrid';
 import { LightingRig } from './LightingRig';
 import { MuseumView } from './MuseumView';
+
+function SharedShaderClock() {
+  useFrame(({ clock }) => {
+    updateSharedWaterTime(clock.getElapsedTime());
+  });
+  return null;
+}
 
 function CameraController() {
   const viewMode = useWfcStore((s) => s.viewMode);
@@ -55,7 +63,7 @@ export function SceneCanvas() {
     <div className="relative h-full w-full">
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         camera={{ fov: 44, near: 0.5, far: 450, position: [31, 24, 34] }}
         gl={{
           antialias: true,
@@ -64,11 +72,12 @@ export function SceneCanvas() {
           toneMappingExposure: 1.05,
         }}
       >
+        <SharedShaderClock />
         <LightingRig preset={lightingPreset} />
         {viewMode === 'city' ? <CityGrid /> : <MuseumView />}
         <CameraController />
 
-        <EffectComposer multisampling={4}>
+        <EffectComposer multisampling={0}>
           <Bloom intensity={0.65} luminanceThreshold={1.05} mipmapBlur />
           <Vignette eskil={false} offset={0.18} darkness={0.5} />
         </EffectComposer>

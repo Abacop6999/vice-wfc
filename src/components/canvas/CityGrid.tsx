@@ -16,43 +16,65 @@ const CYAN_HIGH_ENTROPY = new THREE.Color('#00f0ff');
 const MAGENTA_LOW_ENTROPY = new THREE.Color('#ff2a85');
 const MAX_PROTOTYPE_COUNT = PROTOTYPES.length;
 
+interface ActiveAnimation {
+  group: THREE.Group;
+  progress: number;
+}
+
 /**
- * Wraps a collapsed tile with a smooth bounce-in scale animation on mount.
+ * Renders a collapsed tile and registers itself into a single shared animation map
+ * so zero per-tile useFrame hooks run after the pop-in bounce finishes.
  */
 const AnimatedTile = memo(function AnimatedTile({
+  id,
   x,
   z,
   baseId,
   rotationSteps,
   tileSeed,
   isNight,
+  animateIn,
+  animMapRef,
 }: {
+  id: number;
   x: number;
   z: number;
   baseId: BaseModuleId;
   rotationSteps: number;
   tileSeed: number;
   isNight: boolean;
+  animateIn: boolean;
+  animMapRef: React.MutableRefObject<Map<number, ActiveAnimation>>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const progressRef = useRef(0);
 
-  useFrame((_, delta) => {
-    if (!groupRef.current || progressRef.current >= 1) return;
-    progressRef.current = Math.min(1, progressRef.current + delta * 4.5);
-    const t = progressRef.current;
-    // Ease-out back curve for tactile pop-in bounce
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    const scale = 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-    const clamped = Math.max(0.01, scale);
-    groupRef.current.scale.set(clamped, clamped, clamped);
-  });
+  useEffect(() => {
+    const group = groupRef.current;
+    const map = animMapRef.current;
+    if (!group) return;
+
+    if (animateIn) {
+      group.scale.set(0.01, 0.01, 0.01);
+      map.set(id, { group, progress: 0 });
+    } else {
+      group.scale.set(1, 1, 1);
+      map.delete(id);
+    }
+
+    return () => {
+      map.delete(id);
+    };
+  }, [id, animateIn, animMapRef]);
 
   const rotationY = -rotationSteps * (Math.PI / 2);
 
   return (
-    <group ref={groupRef} position={[x, 0, z]} rotation={[0, rotationY, 0]} scale={[0.01, 0.01, 0.01]}>
+    <group
+      ref={groupRef}
+      position={[x, 0, z]}
+      rotation={[0, rotationY, 0]}
+      scale={animateIn ? [0.01, 0.01, 0.01] : [1, 1, 1]}
+    >
       {(baseId === 'OCEAN' || baseId === 'BEACH' || baseId === 'PROMENADE') && (
         <CoastTile variant={baseId} tileSeed={tileSeed} isNight={isNight} />
       )}
@@ -313,8 +335,32 @@ function CityInstancedProps({
 export function CityGrid() {
   const grid = useWfcStore((s) => s.grid);
   const version = useWfcStore((s) => s.version);
+  const status = useWfcStore((s) => s.status);
   const lightingPreset = useWfcStore((s) => s.lightingPreset);
   const isNight = lightingPreset === 'midnight-neon';
+
+  const animMapRef = useRef<Map<number, ActiveAnimation>>(new Map());
+  const animateIn = status === 'running' || status === 'paused';
+
+  // Single centralized animation loop: O(active animations), zero work once settled.
+  useFrame((_, delta) => {
+    const map = animMapRef.current;
+    if (map.size === 0) return;
+
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+
+    map.forEach((anim, key) => {
+      anim.progress = Math.min(1, anim.progress + delta * 4.5);
+      const t = anim.progress;
+      const scale = Math.max(0.01, 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2));
+      anim.group.scale.set(scale, scale, scale);
+      if (anim.progress >= 1) {
+        anim.group.scale.set(1, 1, 1);
+        map.delete(key);
+      }
+    });
+  });
 
   const halfW = ((grid.width - 1) * TILE_SIZE) / 2;
   const halfH = ((grid.height - 1) * TILE_SIZE) / 2;
@@ -342,18 +388,23 @@ export function CityGrid() {
         return (
           <AnimatedTile
             key={`${version}-${cell.index}`}
+            id={cell.index}
             x={wx}
             z={wz}
             baseId={proto.baseId}
             rotationSteps={proto.rotation}
             tileSeed={tileSeed}
             isNight={isNight}
+            animateIn={animateIn}
+            animMapRef={animMapRef}
           />
         );
       })}
 
-      {/* Live instanced entropy volumes for uncollapsed cells */}
-      <EntropyInstances cells={grid.cells} width={grid.width} height={grid.height} />
+      {/* Only mount entropy instanced mesh while uncollapsed cells remain */}
+      {!grid.completed && (
+        <EntropyInstances cells={grid.cells} width={grid.width} height={grid.height} />
+      )}
 
       {/* Instanced palm trees & neon street lamps */}
       <CityInstancedProps

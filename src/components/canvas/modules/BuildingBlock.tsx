@@ -1,7 +1,28 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import type * as THREE from 'three';
 import { createInteriorMappingMaterial } from '@/shaders/interiorMapping';
+
+const interiorMaterialPool = new Map<string, THREE.ShaderMaterial>();
+
+function getPooledInteriorMaterial(facadeColor: string, isNight: boolean): THREE.ShaderMaterial {
+  const key = `${facadeColor}-${isNight ? 'night' : 'day'}`;
+  let mat = interiorMaterialPool.get(key);
+  if (!mat) {
+    mat = createInteriorMappingMaterial({
+      roomsX: 4,
+      roomsY: 7,
+      depth: 0.65,
+      seed: 1.0,
+      nightFactor: isNight ? 1.0 : 0.0,
+      facadeColor,
+      reflectionColor: isNight ? '#27174d' : '#ff8c69',
+    });
+    interiorMaterialPool.set(key, mat);
+  }
+  return mat;
+}
 
 const PASTEL_PALETTE = [
   '#f8b8c8', // Flamingo Pink
@@ -63,25 +84,7 @@ function ArtDecoBlockTile({ tileSeed, isNight }: { tileSeed: number; isNight: bo
     };
   }, [tileSeed]);
 
-  const interiorMaterial = useMemo(
-    () =>
-      createInteriorMappingMaterial({
-        roomsX: 4,
-        roomsY: config.roomsY,
-        depth: 0.65,
-        seed: tileSeed * 0.137,
-        nightFactor: isNight ? 1.0 : 0.0,
-        facadeColor: config.facadeColor,
-        reflectionColor: isNight ? '#27174d' : '#ff8c69',
-      }),
-    [config.facadeColor, config.roomsY, tileSeed, isNight],
-  );
-
-  useEffect(() => {
-    return () => {
-      interiorMaterial.dispose();
-    };
-  }, [interiorMaterial]);
+  const interiorMaterial = getPooledInteriorMaterial(config.facadeColor, isNight);
 
   const neonIntensity = isNight ? 2.4 : 1.35;
 

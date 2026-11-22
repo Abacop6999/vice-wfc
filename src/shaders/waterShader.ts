@@ -104,3 +104,28 @@ export function createWaterMaterial(options: WaterMaterialOptions = {}): THREE.S
     toneMapped: true,
   });
 }
+
+let sharedDayWater: THREE.ShaderMaterial | null = null;
+let sharedNightWater: THREE.ShaderMaterial | null = null;
+
+/**
+ * Returns a shared water ShaderMaterial singleton per lighting preset so all
+ * OCEAN tiles reuse one GPU program and one uniform update per frame.
+ */
+export function getSharedWaterMaterial(isNight: boolean): THREE.ShaderMaterial {
+  if (isNight) {
+    if (!sharedNightWater) {
+      sharedNightWater = createWaterMaterial({ nightFactor: 1.0 });
+    }
+    return sharedNightWater;
+  }
+  if (!sharedDayWater) {
+    sharedDayWater = createWaterMaterial({ nightFactor: 0.0 });
+  }
+  return sharedDayWater;
+}
+
+export function updateSharedWaterTime(elapsedSeconds: number): void {
+  if (sharedDayWater) sharedDayWater.uniforms.uTime.value = elapsedSeconds;
+  if (sharedNightWater) sharedNightWater.uniforms.uTime.value = elapsedSeconds;
+}

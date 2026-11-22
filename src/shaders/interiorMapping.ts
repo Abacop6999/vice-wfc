@@ -87,8 +87,9 @@ export const interiorMappingFragmentShader = /* glsl */ `
     float dist = min(min(kFar.x, kFar.y), kFar.z);
     vec3 hitPos = vec3(p, 0.0) + rayDir * dist;
 
-    // Deterministic per-room lighting & Vice City palette variation.
-    float roomRand = hash21(roomId + vec2(uSeed * 17.3, uSeed * 31.7));
+    // Deterministic per-room & per-building lighting using world-space cell variation.
+    vec2 buildingCell = floor(vWorldPos.xz * 0.25);
+    float roomRand = hash21(roomId + buildingCell * 13.7 + vec2(uSeed * 17.3, uSeed * 31.7));
     float litThreshold = mix(0.52, 0.24, uNightFactor);
     float isLit = step(litThreshold, roomRand);
 

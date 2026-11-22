@@ -91,8 +91,8 @@ export function LightingRig({ preset }: LightingRigProps) {
         intensity={isNight ? 0.9 : 2.65}
         color={isNight ? '#7c8dff' : '#ffab66'}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-camera-near={5}
         shadow-camera-far={160}
         shadow-camera-left={-56}
