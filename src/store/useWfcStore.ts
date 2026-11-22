@@ -34,10 +34,7 @@ const DEFAULT_SIZE: GridSize = 16;
 const INITIAL_SEED = 1986;
 
 let engine = new WFCEngine({ width: DEFAULT_SIZE, height: DEFAULT_SIZE, seed: INITIAL_SEED });
-const initialStart = typeof performance !== 'undefined' ? performance.now() : 0;
 const initialGrid = engine.solveAll();
-const initialDuration =
-  typeof performance !== 'undefined' ? Math.max(1, Math.round(performance.now() - initialStart)) : 12;
 
 let stepTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -81,7 +78,7 @@ export const useWfcStore = create<WfcStoreState>((set, get) => {
     stepDelayMs: 25,
     viewMode: 'city',
     lightingPreset: 'golden-hour',
-    lastGenerationMs: initialDuration,
+    lastGenerationMs: 0,
     version: 1,
 
     setGridSize: (size) => {

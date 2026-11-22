@@ -257,7 +257,11 @@ export function ControlPanel() {
                   <div>
                     <div className="text-slate-500">SOLVE TIME</div>
                     <div className="text-amber-300">
-                      {lastGenerationMs > 0 ? `${lastGenerationMs}ms` : 'live'}
+                      {lastGenerationMs > 0
+                        ? `${lastGenerationMs}ms`
+                        : status === 'completed'
+                          ? 'ready'
+                          : 'live'}
                     </div>
                   </div>
                 </div>
