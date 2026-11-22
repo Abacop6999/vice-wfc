@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import * as THREE from 'three';
 import { OptionalGltfAsset, ProceduralSportsCar } from './ProceduralProps';
 
 interface RoadTileProps {
@@ -16,67 +17,104 @@ function seededUnit(seed: number, salt: number): number {
   return x - Math.floor(x);
 }
 
+// Shared geometries (allocated once for the entire city)
+const ASPHALT_GEO = new THREE.BoxGeometry(4, 0.08, 4);
+const SIDEWALK_LONG_GEO = new THREE.BoxGeometry(0.76, 0.1, 4);
+const SIDEWALK_CORNER_S_GEO = new THREE.BoxGeometry(3.24, 0.1, 0.76);
+const SIDEWALK_ISLAND_GEO = new THREE.BoxGeometry(0.76, 0.1, 0.76);
+const SIDEWALK_MAT = new THREE.MeshStandardMaterial({ color: '#ddd2c6', roughness: 0.82 });
+
+const roadMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+/**
+ * Generates a cached procedural canvas texture for road lane markings & zebra crosswalks,
+ * turning a 25-mesh intersection into 1 textured asphalt mesh + 4 corner islands.
+ */
+function getRoadMaterial(
+  variant: 'ROAD_STRAIGHT' | 'ROAD_CORNER' | 'ROAD_CROSS',
+  isNight: boolean,
+): THREE.MeshStandardMaterial {
+  const key = `${variant}-${isNight ? 'night' : 'day'}`;
+  const cached = roadMaterialCache.get(key);
+  if (cached) return cached;
+
+  const baseColor = isNight ? '#151822' : '#252932';
+  let map: THREE.CanvasTexture | undefined;
+
+  if (typeof document !== 'undefined') {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, size, size);
+
+      if (variant === 'ROAD_STRAIGHT') {
+        ctx.fillStyle = '#f4b942';
+        ctx.fillRect(size * 0.48, 0, size * 0.015, size);
+        ctx.fillRect(size * 0.505, 0, size * 0.015, size);
+      } else if (variant === 'ROAD_CORNER') {
+        ctx.strokeStyle = '#f4b942';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(size * 0.5, 0);
+        ctx.quadraticCurveTo(size * 0.5, size * 0.5, size, size * 0.5);
+        ctx.stroke();
+      } else if (variant === 'ROAD_CROSS') {
+        ctx.fillStyle = '#f1f5f9';
+        const stripes = [-0.2, -0.1, 0, 0.1, 0.2];
+        for (const offset of stripes) {
+          const p = size * (0.5 + offset) - 5;
+          // North & South crosswalks
+          ctx.fillRect(p, 10, 10, 28);
+          ctx.fillRect(p, size - 38, 10, 28);
+          // West & East crosswalks
+          ctx.fillRect(10, p, 28, 10);
+          ctx.fillRect(size - 38, p, 28, 10);
+        }
+      }
+
+      map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.anisotropy = 4;
+    }
+  }
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: map ? '#ffffff' : baseColor,
+    map,
+    roughness: isNight ? 0.14 : 0.22,
+    metalness: isNight ? 0.48 : 0.32,
+  });
+
+  roadMaterialCache.set(key, mat);
+  return mat;
+}
+
 /**
  * Wet PBR reflective asphalt road tiles (straight, 90-degree corner, 4-way cross).
- * Socket orientation at rotation=0:
- * - ROAD_STRAIGHT: North (Z-) <-> South (Z+)
- * - ROAD_CORNER:   North (Z-) <-> East (X+)
- * - ROAD_CROSS:    North, East, South, West
  */
 export function RoadTile({ variant, tileSeed, isNight }: RoadTileProps) {
-  const asphaltColor = isNight ? '#151822' : '#252932';
-  const asphaltRoughness = isNight ? 0.14 : 0.22;
-  const asphaltMetalness = isNight ? 0.48 : 0.32;
-  const sidewalkColor = '#ddd2c6';
+  const asphaltMat = getRoadMaterial(variant, isNight);
 
-  const hasCar = variant === 'ROAD_STRAIGHT' && seededUnit(tileSeed, 5) > 0.62;
+  const hasCar = variant === 'ROAD_STRAIGHT' && seededUnit(tileSeed, 5) > 0.72;
   const carLaneX = seededUnit(tileSeed, 7) > 0.5 ? 0.52 : -0.52;
   const carRotY = carLaneX > 0 ? Math.PI : 0;
   const carColor = CAR_COLORS[Math.floor(seededUnit(tileSeed, 11) * CAR_COLORS.length)];
 
   return (
     <group>
-      {/* Wet reflective PBR asphalt base */}
-      <mesh position={[0, 0.04, 0]} receiveShadow>
-        <boxGeometry args={[4, 0.08, 4]} />
-        <meshStandardMaterial
-          color={asphaltColor}
-          roughness={asphaltRoughness}
-          metalness={asphaltMetalness}
-        />
-      </mesh>
+      {/* Wet reflective PBR asphalt with painted markings */}
+      <mesh position={[0, 0.04, 0]} geometry={ASPHALT_GEO} material={asphaltMat} receiveShadow />
 
       {variant === 'ROAD_STRAIGHT' && (
         <>
-          {/* Raised East & West sidewalks */}
-          <mesh position={[-1.62, 0.11, 0]} receiveShadow castShadow>
-            <boxGeometry args={[0.76, 0.1, 4]} />
-            <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-          </mesh>
-          <mesh position={[1.62, 0.11, 0]} receiveShadow castShadow>
-            <boxGeometry args={[0.76, 0.1, 4]} />
-            <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-          </mesh>
+          <mesh position={[-1.62, 0.11, 0]} geometry={SIDEWALK_LONG_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[1.62, 0.11, 0]} geometry={SIDEWALK_LONG_GEO} material={SIDEWALK_MAT} receiveShadow />
 
-          {/* Center double yellow lane dividers */}
-          <mesh position={[-0.05, 0.085, 0]}>
-            <boxGeometry args={[0.045, 0.01, 3.8]} />
-            <meshStandardMaterial
-              color="#f4b942"
-              emissive="#f4b942"
-              emissiveIntensity={isNight ? 0.45 : 0.15}
-            />
-          </mesh>
-          <mesh position={[0.05, 0.085, 0]}>
-            <boxGeometry args={[0.045, 0.01, 3.8]} />
-            <meshStandardMaterial
-              color="#f4b942"
-              emissive="#f4b942"
-              emissiveIntensity={isNight ? 0.45 : 0.15}
-            />
-          </mesh>
-
-          {/* Optional retro sports car with GLTF/procedural fallback */}
           {hasCar && (
             <OptionalGltfAsset
               fallback={
@@ -94,70 +132,18 @@ export function RoadTile({ variant, tileSeed, isNight }: RoadTileProps) {
 
       {variant === 'ROAD_CORNER' && (
         <>
-          {/* Outer West sidewalk */}
-          <mesh position={[-1.62, 0.11, 0]} receiveShadow castShadow>
-            <boxGeometry args={[0.76, 0.1, 4]} />
-            <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-          </mesh>
-          {/* Outer South sidewalk */}
-          <mesh position={[0.38, 0.11, 1.62]} receiveShadow castShadow>
-            <boxGeometry args={[3.24, 0.1, 0.76]} />
-            <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-          </mesh>
-          {/* Inner NE corner sidewalk island */}
-          <mesh position={[1.62, 0.11, -1.62]} receiveShadow castShadow>
-            <boxGeometry args={[0.76, 0.1, 0.76]} />
-            <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-          </mesh>
-
-          {/* Curved guide lines connecting North (-Z) to East (+X) */}
-          <mesh position={[0, 0.085, -1.05]}>
-            <boxGeometry args={[0.08, 0.01, 1.8]} />
-            <meshStandardMaterial color="#f4b942" />
-          </mesh>
-          <mesh position={[1.05, 0.085, 0]}>
-            <boxGeometry args={[1.8, 0.01, 0.08]} />
-            <meshStandardMaterial color="#f4b942" />
-          </mesh>
+          <mesh position={[-1.62, 0.11, 0]} geometry={SIDEWALK_LONG_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[0.38, 0.11, 1.62]} geometry={SIDEWALK_CORNER_S_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[1.62, 0.11, -1.62]} geometry={SIDEWALK_ISLAND_GEO} material={SIDEWALK_MAT} receiveShadow />
         </>
       )}
 
       {variant === 'ROAD_CROSS' && (
         <>
-          {/* Four corner sidewalk islands */}
-          {[
-            [-1.62, -1.62],
-            [1.62, -1.62],
-            [-1.62, 1.62],
-            [1.62, 1.62],
-          ].map(([x, z], idx) => (
-            <mesh key={idx} position={[x, 0.11, z]} receiveShadow castShadow>
-              <boxGeometry args={[0.76, 0.1, 0.76]} />
-              <meshStandardMaterial color={sidewalkColor} roughness={0.82} />
-            </mesh>
-          ))}
-
-          {/* Four zebra crosswalks */}
-          {[-0.8, -0.4, 0, 0.4, 0.8].map((offset, idx) => (
-            <React.Fragment key={idx}>
-              <mesh position={[offset, 0.086, -1.55]}>
-                <boxGeometry args={[0.16, 0.01, 0.45]} />
-                <meshStandardMaterial color="#f5f5f5" roughness={0.5} />
-              </mesh>
-              <mesh position={[offset, 0.086, 1.55]}>
-                <boxGeometry args={[0.16, 0.01, 0.45]} />
-                <meshStandardMaterial color="#f5f5f5" roughness={0.5} />
-              </mesh>
-              <mesh position={[-1.55, 0.086, offset]}>
-                <boxGeometry args={[0.45, 0.01, 0.16]} />
-                <meshStandardMaterial color="#f5f5f5" roughness={0.5} />
-              </mesh>
-              <mesh position={[1.55, 0.086, offset]}>
-                <boxGeometry args={[0.45, 0.01, 0.16]} />
-                <meshStandardMaterial color="#f5f5f5" roughness={0.5} />
-              </mesh>
-            </React.Fragment>
-          ))}
+          <mesh position={[-1.62, 0.11, -1.62]} geometry={SIDEWALK_ISLAND_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[1.62, 0.11, -1.62]} geometry={SIDEWALK_ISLAND_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[-1.62, 0.11, 1.62]} geometry={SIDEWALK_ISLAND_GEO} material={SIDEWALK_MAT} receiveShadow />
+          <mesh position={[1.62, 0.11, 1.62]} geometry={SIDEWALK_ISLAND_GEO} material={SIDEWALK_MAT} receiveShadow />
         </>
       )}
     </group>

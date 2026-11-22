@@ -2,6 +2,27 @@
 
 import React, { Component, Suspense, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
+import * as THREE from 'three';
+
+const CAR_BODY_GEO = new THREE.BoxGeometry(0.48, 0.16, 1.05);
+const CAR_CABIN_GEO = new THREE.BoxGeometry(0.4, 0.13, 0.48);
+const CAR_HEADLIGHT_GEO = new THREE.BoxGeometry(0.42, 0.05, 0.02);
+const CAR_TAILLIGHT_GEO = new THREE.BoxGeometry(0.42, 0.045, 0.02);
+const CAR_CABIN_MAT = new THREE.MeshStandardMaterial({ color: '#101824', metalness: 0.85, roughness: 0.12 });
+const CAR_HEAD_DAY = new THREE.MeshStandardMaterial({ color: '#fff7d6', emissive: '#ffeaa7', emissiveIntensity: 1.4, toneMapped: false });
+const CAR_HEAD_NIGHT = new THREE.MeshStandardMaterial({ color: '#fff7d6', emissive: '#ffeaa7', emissiveIntensity: 3.2, toneMapped: false });
+const CAR_TAIL_DAY = new THREE.MeshStandardMaterial({ color: '#ff1f5a', emissive: '#ff1f5a', emissiveIntensity: 1.2, toneMapped: false });
+const CAR_TAIL_NIGHT = new THREE.MeshStandardMaterial({ color: '#ff1f5a', emissive: '#ff1f5a', emissiveIntensity: 2.8, toneMapped: false });
+
+const carBodyMatPool = new Map<string, THREE.MeshStandardMaterial>();
+function getCarBodyMaterial(color: string): THREE.MeshStandardMaterial {
+  let mat = carBodyMatPool.get(color);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color, metalness: 0.65, roughness: 0.22 });
+    carBodyMatPool.set(color, mat);
+  }
+  return mat;
+}
 
 interface ErrorBoundaryProps {
   fallback: React.ReactNode;
@@ -73,67 +94,22 @@ export function ProceduralSportsCar({
   color?: string;
   isNight?: boolean;
 }) {
-  const headlightIntensity = isNight ? 3.2 : 1.4;
-  const taillightIntensity = isNight ? 2.8 : 1.2;
+  const bodyMat = getCarBodyMaterial(color);
 
   return (
     <group position={position} rotation={rotation}>
-      {/* Main wedge chassis */}
-      <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.48, 0.16, 1.05]} />
-        <meshStandardMaterial color={color} metalness={0.65} roughness={0.22} />
-      </mesh>
-      {/* Low-slung cockpit canopy */}
-      <mesh position={[0, 0.28, -0.05]} castShadow>
-        <boxGeometry args={[0.4, 0.13, 0.48]} />
-        <meshStandardMaterial color="#101824" metalness={0.85} roughness={0.12} />
-      </mesh>
-      {/* Rear spoiler */}
-      <mesh position={[0, 0.27, -0.46]} castShadow>
-        <boxGeometry args={[0.48, 0.03, 0.1]} />
-        <meshStandardMaterial color={color} metalness={0.65} roughness={0.22} />
-      </mesh>
-      {/* Wheels */}
-      {[
-        [-0.23, 0.09, 0.3],
-        [0.23, 0.09, 0.3],
-        [-0.23, 0.09, -0.32],
-        [0.23, 0.09, -0.32],
-      ].map(([x, y, z], idx) => (
-        <mesh key={idx} position={[x, y, z]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.09, 0.09, 0.07, 10]} />
-          <meshStandardMaterial color="#18181b" roughness={0.8} />
-        </mesh>
-      ))}
-      {/* Emissive headlights */}
-      <mesh position={[-0.15, 0.17, 0.53]}>
-        <boxGeometry args={[0.11, 0.05, 0.02]} />
-        <meshStandardMaterial
-          color="#fff7d6"
-          emissive="#ffeaa7"
-          emissiveIntensity={headlightIntensity}
-          toneMapped={false}
-        />
-      </mesh>
-      <mesh position={[0.15, 0.17, 0.53]}>
-        <boxGeometry args={[0.11, 0.05, 0.02]} />
-        <meshStandardMaterial
-          color="#fff7d6"
-          emissive="#ffeaa7"
-          emissiveIntensity={headlightIntensity}
-          toneMapped={false}
-        />
-      </mesh>
-      {/* Emissive rear light bar */}
-      <mesh position={[0, 0.18, -0.53]}>
-        <boxGeometry args={[0.42, 0.045, 0.02]} />
-        <meshStandardMaterial
-          color="#ff1f5a"
-          emissive="#ff1f5a"
-          emissiveIntensity={taillightIntensity}
-          toneMapped={false}
-        />
-      </mesh>
+      <mesh position={[0, 0.14, 0]} geometry={CAR_BODY_GEO} material={bodyMat} />
+      <mesh position={[0, 0.26, -0.05]} geometry={CAR_CABIN_GEO} material={CAR_CABIN_MAT} />
+      <mesh
+        position={[0, 0.15, 0.53]}
+        geometry={CAR_HEADLIGHT_GEO}
+        material={isNight ? CAR_HEAD_NIGHT : CAR_HEAD_DAY}
+      />
+      <mesh
+        position={[0, 0.16, -0.53]}
+        geometry={CAR_TAILLIGHT_GEO}
+        material={isNight ? CAR_TAIL_NIGHT : CAR_TAIL_DAY}
+      />
     </group>
   );
 }

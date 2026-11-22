@@ -18,6 +18,25 @@ function SharedShaderClock() {
   return null;
 }
 
+/**
+ * Disables continuous 60 FPS shadow map re-rendering (which doubles draw calls every frame)
+ * and triggers shadow updates only when the city layout, lighting, or view mode changes.
+ */
+function OnDemandShadowUpdater() {
+  const { gl } = useThree();
+  const collapsedCount = useWfcStore((s) => s.grid.collapsedCount);
+  const version = useWfcStore((s) => s.version);
+  const lightingPreset = useWfcStore((s) => s.lightingPreset);
+  const viewMode = useWfcStore((s) => s.viewMode);
+
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+  }, [gl, collapsedCount, version, lightingPreset, viewMode]);
+
+  return null;
+}
+
 function CameraController() {
   const viewMode = useWfcStore((s) => s.viewMode);
   const gridSize = useWfcStore((s) => s.gridSize);
@@ -63,7 +82,7 @@ export function SceneCanvas() {
     <div className="relative h-full w-full">
       <Canvas
         shadows
-        dpr={[1, 1.5]}
+        dpr={1}
         camera={{ fov: 44, near: 0.5, far: 450, position: [31, 24, 34] }}
         gl={{
           antialias: true,
@@ -73,12 +92,13 @@ export function SceneCanvas() {
         }}
       >
         <SharedShaderClock />
+        <OnDemandShadowUpdater />
         <LightingRig preset={lightingPreset} />
         {viewMode === 'city' ? <CityGrid /> : <MuseumView />}
         <CameraController />
 
         <EffectComposer multisampling={0}>
-          <Bloom intensity={0.65} luminanceThreshold={1.05} mipmapBlur />
+          <Bloom intensity={0.65} luminanceThreshold={1.05} mipmapBlur levels={4} />
           <Vignette eskil={false} offset={0.18} darkness={0.5} />
         </EffectComposer>
       </Canvas>
