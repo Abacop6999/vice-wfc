@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
-import * as THREE from 'three';
 import { createInteriorMappingMaterial } from '@/shaders/interiorMapping';
 
 const PASTEL_PALETTE = [
