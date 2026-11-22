@@ -5,6 +5,9 @@ Interactive 3D procedural city generator powered by **Wave Function Collapse (WF
 - **Live Target:** `https://vice-wfc.vercel.app`
 - **Repository:** `https://github.com/Abacop6999/vice-wfc`
 
+<img width="2175" height="1275" alt="image" src="https://github.com/user-attachments/assets/0fcd2f64-dc70-4978-8ab8-17c5f530ae7c" />
+
+
 ---
 
 ## Quick Start
